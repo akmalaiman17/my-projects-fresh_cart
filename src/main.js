@@ -1243,16 +1243,10 @@ function createInitialState() {
     return {
         budget: 100,
         items: [
-            { id: makeId(), name: 'Bananas', quantity: '1 bunch', price: 4.5, category: 'Fruits & Vegetables', icon: '🍌', checked: true },
-            { id: makeId(), name: 'Fresh milk', quantity: '1 litre', price: 6.9, category: 'Dairy & Eggs', icon: '🥛', checked: true },
-            { id: makeId(), name: 'Wholemeal bread', quantity: '1 loaf', price: 5.2, category: 'Bakery', icon: '🍞', checked: false },
-            { id: makeId(), name: 'Eggs', quantity: '10 pieces', price: 7.5, category: 'Dairy & Eggs', icon: '🥚', checked: false },
-            { id: makeId(), name: 'Chicken breast', quantity: '500 g', price: 12, category: 'Meat & Seafood', icon: '🍗', checked: false },
-            { id: makeId(), name: 'Tomatoes', quantity: '500 g', price: 3.2, category: 'Fruits & Vegetables', icon: '🍅', checked: false },
-            { id: makeId(), name: 'Rice', quantity: '1 kg', price: 6.5, category: 'Pantry', icon: '🍚', checked: false },
-            { id: makeId(), name: 'Dish soap', quantity: '1 bottle', price: 4, category: 'Household', icon: '🧴', checked: false },
+            // Keep your existing initial grocery items here.
         ],
         history: [],
+        savedLists: [],
     }
 }
 
@@ -1329,7 +1323,9 @@ function loadState() {
                     icon: typeof item.icon === 'string' ? item.icon : '🛒',
                     checked: Boolean(item.checked),
                 })),
-            history: Array.isArray(parsed.history) ? parsed.history : [],
+            savedLists: Array.isArray(parsed.savedLists)
+                ? parsed.savedLists
+                : [],
         }
     } catch {
         return createInitialState()
@@ -1915,6 +1911,7 @@ function renderCompleted(stats) {
   `
 }
 
+
 function renderHome(stats) {
     return `
     <header class="welcome">
@@ -1928,8 +1925,29 @@ function renderHome(stats) {
     ${renderQuickAdd()}
     ${renderCompleted(stats)}
     ${renderBudget(stats)}
+
+    <section class="trip-actions">
+      <button
+        type="button"
+        class="secondary-button trip-save-button"
+        data-action="save-current-list"
+      >
+        <span aria-hidden="true">💾</span>
+        Save Current Grocery List
+      </button>
+
+      <button
+        type="button"
+        class="primary-button trip-complete-button"
+        data-action="complete-groceries"
+      >
+        <span aria-hidden="true">✓</span>
+        Complete Groceries
+      </button>
+    </section>
   `
 }
+
 
 function renderCategories() {
     const query = (ui.categorySearch || '').trim().toLowerCase()
@@ -2331,6 +2349,7 @@ function renderBudgetModal() {
   `
 }
 
+
 function renderHistoryModal() {
     const history = [...state.history].reverse()
 
@@ -2343,15 +2362,46 @@ function renderHistoryModal() {
         </div>
 
         ${history.length ? `
-          ${history.map(entry => `
-            <div class="history-row">
-              <div>
-                <h4>${escapeHTML(entry.date || 'Previous shopping trip')}</h4>
-                <p>${Number(entry.count) || 0} items completed</p>
-              </div>
-              <span class="history-total">${shortMoney(entry.total)}</span>
-            </div>
-          `).join('')}
+          ${history.map(entry => {
+        const items = Array.isArray(entry.items) ? entry.items : []
+
+        return `
+                <details class="history-trip">
+                  <summary class="history-row">
+                    <div>
+                      <h4>${escapeHTML(entry.date || 'Previous shopping trip')}</h4>
+                      <p>${Number(entry.count) || 0} purchased items</p>
+                    </div>
+                    <span class="history-total">${shortMoney(entry.total)}</span>
+                  </summary>
+
+                  <div class="history-trip-details">
+                    <p><strong>Total spent:</strong> ${money(entry.total)}</p>
+                    <p><strong>Estimated list total:</strong> ${money(entry.estimatedTotal ?? entry.total)}</p>
+                    <p><strong>Budget:</strong> ${money(entry.budget ?? 0)}</p>
+                    <p><strong>Budget remaining:</strong> ${money(entry.remainingBudget ?? 0)}</p>
+
+                    <h4>Items in this trip</h4>
+
+                    ${items.length ? `
+                      <ul class="history-item-list">
+                        ${items.map(item => `
+                          <li>
+                            <span>
+                              ${item.checked ? '✓' : '○'}
+                              ${escapeHTML(item.name)}
+                              ${item.quantity ? ` — ${escapeHTML(item.quantity)}` : ''}
+                            </span>
+                            <span>${money(item.price)}</span>
+                          </li>
+                        `).join('')}
+                      </ul>
+                    ` : '<p>No item details available for this older trip.</p>'}
+                  </div>
+                </details>
+              `
+    }).join('')}
+
           <button class="secondary-button" style="width:100%;margin-top:18px" data-action="clear-history">
             Clear history
           </button>
@@ -2366,6 +2416,7 @@ function renderHistoryModal() {
     </div>
   `
 }
+
 
 function renderModal() {
     if (ui.modal === 'add' || ui.modal === 'edit') return renderItemModal()
@@ -2481,7 +2532,17 @@ document.addEventListener('click', event => {
     const action = button.dataset.action
 
     switch (action) {
+        case 'save-current-list':
+            saveCurrentGroceryList()
+            break
 
+        case 'complete-groceries':
+            if (confirm(
+                'Complete this shopping trip? Your purchased items and spending will be saved to history, and the current list will be cleared.'
+            )) {
+                completeGroceryTrip()
+            }
+            break
         case 'catalog-add': {
             const name = button.dataset.name
             const category = button.dataset.category
@@ -2788,6 +2849,91 @@ document.addEventListener('input', event => {
         nextInput.setSelectionRange(cursor, cursor)
     }
 })
+
+function saveCurrentGroceryList() {
+    if (!state.items.length) {
+        showToast('Your shopping list is empty.')
+        return
+    }
+
+    const savedList = {
+        id: makeId(),
+        name: `Saved List — ${new Date().toLocaleDateString('en-MY')}`,
+        date: new Date().toLocaleString('en-MY'),
+        budget: state.budget,
+        items: state.items.map(item => ({ ...item })),
+    }
+
+    if (!Array.isArray(state.savedLists)) {
+        state.savedLists = []
+    }
+
+    state.savedLists.push(savedList)
+    saveState()
+    showToast('Your grocery list has been saved.')
+}
+
+function completeGroceryTrip() {
+    if (!state.items.length) {
+        showToast('Add groceries before completing your trip.')
+        return
+    }
+
+    const stats = getStats()
+
+    const purchasedItems = state.items.filter(item => item.checked)
+
+    if (!purchasedItems.length) {
+        showToast('Check off your purchased items first.')
+        return
+    }
+
+    const trip = {
+        id: makeId(),
+        date: new Date().toLocaleString('en-MY', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        }),
+
+        // Preserve every item, including items not purchased.
+        items: state.items.map(item => ({ ...item })),
+
+        count: purchasedItems.length,
+        total: purchasedItems.reduce(
+            (sum, item) => sum + (Number(item.price) || 0),
+            0
+        ),
+
+        estimatedTotal: stats.total,
+        budget: Number(state.budget) || 0,
+        remainingBudget:
+            (Number(state.budget) || 0) -
+            purchasedItems.reduce(
+                (sum, item) => sum + (Number(item.price) || 0),
+                0
+            ),
+    }
+
+    if (!Array.isArray(state.history)) {
+        state.history = []
+    }
+
+    state.history.push(trip)
+
+    // Start a new shopping list after recording the completed trip.
+    state.items = []
+    ui.page = 'home'
+    ui.filter = 'All'
+    ui.search = ''
+    ui.modal = null
+
+    saveState()
+    showToast('Shopping trip completed and saved to history.')
+}
+
 
 // Keyboard shortcuts: Escape closes a modal.
 document.addEventListener('input', (event) => {

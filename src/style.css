@@ -1549,3 +1549,83 @@ video {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Shopping trip actions */
+.trip-actions {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0 32px;
+}
+
+.trip-actions button {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.trip-save-button {
+  border: 1px solid #cfe1d0;
+  background: #f4f8f1;
+  color: #315d3a;
+}
+
+.trip-complete-button {
+  box-shadow: 0 8px 20px rgba(48, 110, 62, 0.14);
+}
+
+.trip-actions button:active {
+  transform: scale(0.99);
+}
+
+/* Completed shopping trip details */
+.history-trip {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border, #e4eadd);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+}
+
+.history-trip > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.history-trip > summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-trip-details {
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e4eadd);
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.history-trip-details p {
+  margin: 6px 0;
+}
+
+.history-item-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+
+.history-item-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border, #e4eadd);
+}
+
+.history-item-list li span:last-child {
+  flex-shrink: 0;
+  font-weight: 600;
+}
